@@ -1,0 +1,25 @@
+# EAS upload ignore (denylist). Everything NOT listed here uploads —
+# so assets/, src/, supabase/, app.json and .env are included.
+
+node_modules/
+.expo/
+dist/
+web-build/
+/android
+/ios
+
+# local-only env overrides (the base .env IS uploaded for EXPO_PUBLIC_* vars)
+.env*.local
+
+# misc
+.git/
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+*.zip
+*.tsbuildinfo
+.metro-health-check*
+style-picker.html
+claude-style-preview.html

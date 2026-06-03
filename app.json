@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "gymbuddy",
+    "slug": "gymbuddy",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.aryasentry2005.gymbuddy",
+      "permissions": ["POST_NOTIFICATIONS"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-font",
+      "expo-camera",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "GymBuddy uses your photos to analyse food",
+          "cameraPermission": "GymBuddy uses your camera to log meals"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#D4721E"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "28bf63d0-b925-4264-913e-fc1b94a5e2f2"
+      }
+    },
+    "owner": "aryasentry2005"
+  }
+}

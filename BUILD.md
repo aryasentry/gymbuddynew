@@ -4,44 +4,25 @@ Builds a sideloadable **debug APK** entirely on GitHub's runners. No EAS queue, 
 
 ---
 
-## 1. One clean git repo (fix submodule errors)
+## 1. Git repo — ALREADY DONE ✅
 
-The "submodule" error happens when a folder you commit already contains its own `.git`
-(git then stores it as a gitlink instead of the files). GymBuddy must be **one** repo,
-rooted at the `gymbuddy` folder, with **no nested `.git`** inside and **not** committed
-from a parent folder that is itself a repo.
+A clean standalone repo was created at the `gymbuddy` folder:
+- `git init` + first commit (77 files) on branch `main`
+- `.env`, `node_modules/`, `android/`, `ios/` excluded; assets + workflow included
+- Independent of the `Documents/.git` repo → no submodule nesting
 
-Run these in PowerShell from the project folder:
+Nothing to do here. Just push it (step 1b).
+
+### 1b. Create the GitHub repo + push
+Create an **empty** repo on github.com (no README/gitignore), then from the project folder:
 
 ```powershell
 cd "C:\Users\kalid\OneDrive\Documents\health\gymbuddy"
-
-# 1) List any nested .git repos (there should be NONE except the root one)
-Get-ChildItem -Recurse -Force -Directory -Filter .git | Where-Object { $_.FullName -ne "$PWD\.git" } | Select-Object FullName
-
-# 2) If the list above is non-empty, delete those nested .git folders, e.g.:
-#    Remove-Item -Recurse -Force "path\shown\above\.git"
-
-# 3) If git is broken / it was added as a submodule of a parent repo, reset cleanly:
-Remove-Item -Recurse -Force .git   # ONLY if needed — wipes local history, not your code
-git init
-git add .
-git commit -m "GymBuddy app"
-git branch -M main
-```
-
-Then create an **empty** repo on GitHub (no README) and push:
-
-```powershell
 git remote add origin https://github.com/<your-username>/gymbuddy.git
 git push -u origin main
 ```
 
-`node_modules/`, `android/`, `ios/`, and `.env` are git-ignored — they will NOT be pushed
-(the workflow regenerates `android/` and recreates `.env` from secrets).
-
-> OneDrive note: building locally inside a OneDrive-synced folder can cause file-lock issues.
-> The GitHub Actions build is unaffected (it runs in the cloud).
+> OneDrive note: cloud build is unaffected by OneDrive; only local builds can hit file locks.
 
 ---
 

@@ -186,8 +186,20 @@ export interface SavedPlan {
 }
 
 export type Muscle =
-  | 'chest' | 'shoulders' | 'biceps' | 'triceps' | 'forearms' | 'abs'
-  | 'quads' | 'hamstrings' | 'calves' | 'glutes' | 'back' | 'lats' | 'traps';
+  // shoulders
+  | 'front_delts' | 'side_delts' | 'rear_delts'
+  // chest
+  | 'upper_chest' | 'lower_chest'
+  // arms
+  | 'biceps_long' | 'biceps_short'
+  | 'triceps_long' | 'triceps_lateral' | 'triceps_medial'
+  | 'forearms'
+  // core
+  | 'upper_abs' | 'lower_abs' | 'obliques'
+  // back
+  | 'traps_upper' | 'traps_mid' | 'lats' | 'rhomboids' | 'lower_back'
+  // legs
+  | 'glutes' | 'quads' | 'adductors' | 'hamstrings' | 'calves' | 'soleus';
 
 export type ReminderKind = 'meal' | 'workout' | 'water' | 'weight' | 'custom';
 

@@ -6,21 +6,39 @@ import { Muscle } from '../../types';
 
 // Anatomy image is front (left) + back (right). Regions are [left%, top%, w%, h%]
 // of the whole image, so they scale with any render size.
-const IMG_ASPECT = 1740 / 940; // ~1.85 (w/h)
+const IMG_ASPECT = 432 / 230; // ~1.88 (w/h). Front body center ~28.5%, back ~70.5%.
 const REGIONS: Record<Muscle, number[][]> = {
-  chest:      [[25, 21, 7, 8], [33, 21, 7, 8]],
-  shoulders:  [[20, 18, 7, 6], [40, 18, 7, 6], [60, 18, 7, 6], [80, 18, 7, 6]],
-  biceps:     [[19, 25, 6, 9], [42, 25, 6, 9]],
-  triceps:    [[59, 25, 6, 9], [81, 25, 6, 9]],
-  forearms:   [[16, 35, 6, 9], [45, 35, 6, 9], [57, 35, 6, 9], [84, 35, 6, 9]],
-  abs:        [[28, 31, 8, 13]],
-  traps:      [[64, 17, 12, 6]],
-  lats:       [[63, 28, 6, 9], [74, 28, 6, 9]],
-  back:       [[65, 30, 10, 13]],
-  glutes:     [[64, 45, 6, 8], [72, 45, 6, 8]],
-  quads:      [[25, 50, 7, 15], [34, 50, 7, 15]],
-  hamstrings: [[64, 53, 7, 14], [73, 53, 7, 14]],
-  calves:     [[26, 68, 6, 13], [35, 68, 6, 13], [65, 69, 6, 13], [74, 69, 6, 13]],
+  // shoulders
+  front_delts:     [[22, 13, 5, 4], [33, 13, 5, 4]],
+  side_delts:      [[19, 14, 4, 5], [37, 14, 4, 5]],
+  rear_delts:      [[62, 14, 4, 4], [78, 14, 4, 4]],
+  // chest
+  upper_chest:     [[24, 15, 5, 3], [30, 15, 5, 3]],
+  lower_chest:     [[24, 18, 5, 3], [30, 18, 5, 3]],
+  // arms (front biceps, back triceps)
+  biceps_long:     [[19, 18, 3, 6], [38, 18, 3, 6]],
+  biceps_short:    [[21, 19, 3, 6], [36, 19, 3, 6]],
+  triceps_long:    [[60, 18, 3, 7], [79, 18, 3, 7]],
+  triceps_lateral: [[58, 19, 2, 7], [81, 19, 2, 7]],
+  triceps_medial:  [[62, 20, 2, 6], [78, 20, 2, 6]],
+  forearms:        [[17, 26, 4, 7], [39, 26, 4, 7], [57, 27, 4, 7], [81, 27, 4, 7]],
+  // core
+  upper_abs:       [[26, 23, 7, 5]],
+  lower_abs:       [[27, 29, 5, 4]],
+  obliques:        [[24, 24, 3, 6], [33, 24, 3, 6]],
+  // back
+  traps_upper:     [[67, 12, 8, 5]],
+  traps_mid:       [[65, 17, 12, 5]],
+  rhomboids:       [[67, 21, 9, 4]],
+  lats:            [[64, 22, 5, 8], [73, 22, 5, 8]],
+  lower_back:      [[67, 30, 8, 5]],
+  // legs
+  glutes:          [[65, 36, 5, 8], [71, 36, 5, 8]],
+  quads:           [[25, 40, 4, 16], [31, 40, 4, 16]],
+  adductors:       [[28, 37, 4, 8]],
+  hamstrings:      [[65, 45, 5, 15], [72, 45, 5, 15]],
+  calves:          [[25, 62, 4, 14], [31, 62, 4, 14], [66, 62, 4, 14], [72, 62, 4, 14]],
+  soleus:          [[66, 75, 4, 5], [72, 75, 4, 5]],
 };
 
 export function MuscleMap({ active, width }: { active: Set<Muscle>; width?: number }) {

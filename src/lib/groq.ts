@@ -160,7 +160,7 @@ export async function classifyMuscles(names: string[]): Promise<Record<string, s
   const data = await groqRequest({
     model: CHAT_MODEL,
     messages: [
-      { role: 'system', content: 'Map each exercise to the muscles it trains. Use ONLY these exact muscle keys: chest, shoulders, biceps, triceps, forearms, abs, quads, hamstrings, calves, glutes, back, lats, traps. Return ONLY JSON: {"Exercise Name": ["muscle", ...]}.' },
+      { role: 'system', content: 'Map each exercise to the specific muscles it trains. Use ONLY these exact keys: front_delts, side_delts, rear_delts, upper_chest, lower_chest, biceps_long, biceps_short, triceps_long, triceps_lateral, triceps_medial, forearms, upper_abs, lower_abs, obliques, traps_upper, traps_mid, lats, rhomboids, lower_back, glutes, quads, adductors, hamstrings, calves, soleus. Include all relevant heads. Return ONLY JSON: {"Exercise Name": ["key", ...]}.' },
       { role: 'user', content: names.join('\n') },
     ],
     max_tokens: 400,

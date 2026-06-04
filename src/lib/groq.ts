@@ -63,11 +63,17 @@ export async function analyzeFoodImage(
 User describes: "${caption}"
 User profile: ${profile.height_cm}cm, ${profile.weight_kg}kg, goal: ${goalLabel(profile.goal)}
 
-Look at the image carefully. Estimate each food item's quantity and nutrition.
-Consider standard Indian portion sizes for Indian dishes.
-Consider reference objects (spoon, hand, plate) if visible to improve accuracy.
+PORTION ESTIMATION — reason through these steps SILENTLY (do not print the reasoning), this is the hardest part:
+1. Identify a SCALE REFERENCE in the image: a dinner plate (~26cm), spoon (~15cm), fork, a hand/fingers, a standard katori/bowl (~150ml), or a phone. State which you used.
+2. Judge each food's footprint and HEIGHT relative to that reference — a heaped serving is far heavier than a flat one. Don't assume; reason from the visible volume.
+3. Convert volume to grams using typical food densities, then to calories/macros.
+4. If no reference object is visible, assume a standard 26cm dinner plate and say confidence is "low".
+5. Use standard Indian portion sizes for Indian dishes (1 roti ~40g, 1 katori dal ~150g, 1 idli ~40g, 1 dosa ~80g).
 
 Also estimate key micronutrients per item and in the total: fiber_g, sugar_g, sodium_mg, potassium_mg, calcium_mg, iron_mg, vitamin_c_mg.
+
+Set "confidence": high only if a clear reference object was visible; medium if portions were inferred from a plate; low if it was a rough guess.
+Put your scale reference + key assumptions in "notes" (one short sentence).
 
 Return ONLY valid JSON — no markdown, no extra text:
 {

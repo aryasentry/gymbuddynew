@@ -1,18 +1,30 @@
-import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert, useColorScheme } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert, Image, Modal } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useAuthStore } from '../../store/authStore';
 import { useFoodStore } from '../../store/foodStore';
 import { useProfileStore } from '../../store/profileStore';
 import { TopBar } from '../../components/common/TopBar';
 import { ProgressBar } from '../../components/common/ProgressBar';
 import { SkeletonRow } from '../../components/common/LoadingScreen';
-import { colors, fonts, spacing, radius } from '../../theme';
+import { MacroBars } from '../../components/food/MacroBars';
+import { Button } from '../../components/common/Button';
+import { fonts, spacing, radius } from '../../theme';
 import { useTheme } from '../../theme/useTheme';
-import { FoodStackParamList } from '../../types';
+import { analyzeFoodImage } from '../../lib/groq';
+import { FoodStackParamList, FoodLog } from '../../types';
 import { LogMealScreen } from './LogMealScreen';
+
+function logTotal(l: FoodLog) {
+  return {
+    calories: l.total_calories, protein: l.total_protein, carbs: l.total_carbs, fat: l.total_fat,
+    fiber_g: l.total_fiber_g ?? 0, sugar_g: l.total_sugar_g ?? 0, sodium_mg: l.total_sodium_mg ?? 0,
+    potassium_mg: l.total_potassium_mg ?? 0, calcium_mg: l.total_calcium_mg ?? 0, iron_mg: l.total_iron_mg ?? 0, vitamin_c_mg: l.total_vitamin_c_mg ?? 0,
+  };
+}
 
 const Stack = createNativeStackNavigator<FoodStackParamList>();
 
@@ -32,8 +44,32 @@ function FoodLogMain() {
   const navigation = useNavigation<any>();
   const { user } = useAuthStore();
   const { profile } = useProfileStore();
-  const { todayLogs, todayNutrition, loading, fetchToday, deleteLog } = useFoodStore();
+  const { todayLogs, todayNutrition, loading, fetchToday, deleteLog, updateLogAnalysis } = useFoodStore();
   const [refreshing, setRefreshing] = React.useState(false);
+  const [selected, setSelected] = useState<FoodLog | null>(null);
+  const [reanalyzing, setReanalyzing] = useState(false);
+
+  async function reanalyse(log: FoodLog) {
+    if (!log.image_url || !profile) { Alert.alert('No photo', 'This log has no saved photo to re-analyse.'); return; }
+    setReanalyzing(true);
+    try {
+      const local = (FileSystem.cacheDirectory ?? '') + `reanalyse-${Date.now()}.jpg`;
+      await FileSystem.downloadAsync(log.image_url, local);
+      const b64 = await FileSystem.readAsStringAsync(local, { encoding: FileSystem.EncodingType.Base64 });
+      const r = await analyzeFoodImage([b64], log.caption || 'food in image', profile);
+      await updateLogAnalysis(log.id, r.items, r.total);
+      setSelected(prev => prev && prev.id === log.id ? {
+        ...prev, food_items: r.items,
+        total_calories: r.total.calories, total_protein: r.total.protein, total_carbs: r.total.carbs, total_fat: r.total.fat,
+        total_fiber_g: r.total.fiber_g ?? 0, total_sugar_g: r.total.sugar_g ?? 0, total_sodium_mg: r.total.sodium_mg ?? 0,
+        total_potassium_mg: r.total.potassium_mg ?? 0, total_calcium_mg: r.total.calcium_mg ?? 0, total_iron_mg: r.total.iron_mg ?? 0, total_vitamin_c_mg: r.total.vitamin_c_mg ?? 0,
+      } : prev);
+    } catch (e: any) {
+      Alert.alert('Re-analyse failed', e.message ?? 'Try again.');
+    } finally {
+      setReanalyzing(false);
+    }
+  }
 
   const bg = c.bg;
   const textColor = c.text;
@@ -118,6 +154,7 @@ function FoodLogMain() {
               {logs.map(log => (
                 <TouchableOpacity
                   key={log.id}
+                  onPress={() => setSelected(log)}
                   onLongPress={() => confirmDelete(log.id)}
                   style={[styles.logRow, { borderBottomColor: borderColor }]}
                   activeOpacity={0.7}
@@ -127,8 +164,8 @@ function FoodLogMain() {
                       {log.caption ?? log.food_items?.map(i => i.name).join(', ')}
                     </Text>
                     <View style={styles.macroRow}>
-                      <Text style={[styles.macroChip, { color: dark ? colors.darkBlue : colors.blue, fontFamily: fonts.sans }]}>P {Math.round(log.total_protein)}g</Text>
-                      <Text style={[styles.macroChip, { color: dark ? colors.darkGreen : colors.green, fontFamily: fonts.sans }]}>C {Math.round(log.total_carbs)}g</Text>
+                      <Text style={[styles.macroChip, { color: c.blue, fontFamily: fonts.sans }]}>P {Math.round(log.total_protein)}g</Text>
+                      <Text style={[styles.macroChip, { color: c.green, fontFamily: fonts.sans }]}>C {Math.round(log.total_carbs)}g</Text>
                       <Text style={[styles.macroChip, { color: mutedColor, fontFamily: fonts.sans }]}>F {Math.round(log.total_fat)}g</Text>
                     </View>
                   </View>
@@ -151,6 +188,56 @@ function FoodLogMain() {
 
         <View style={{ height: insets.bottom + spacing.xl }} />
       </ScrollView>
+
+      {/* Log detail */}
+      <Modal visible={!!selected} transparent animationType="slide" onRequestClose={() => setSelected(null)}>
+        <View style={styles.detailOverlay}>
+          <View style={[styles.detailSheet, { backgroundColor: c.surfaceAlt, borderColor: c.border, paddingBottom: insets.bottom + spacing.lg }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.detailHead}>
+                <Text style={[styles.detailTitle, { color: c.text, fontFamily: fonts.headingLoaded }]} numberOfLines={2}>
+                  {selected?.caption ?? 'Meal'}
+                </Text>
+                <TouchableOpacity onPress={() => setSelected(null)}><Text style={{ color: c.textMuted, fontSize: 18 }}>✕</Text></TouchableOpacity>
+              </View>
+              <Text style={[styles.detailMeta, { color: c.textMuted, fontFamily: fonts.sans }]}>
+                {selected ? `${selected.meal_type.replace('_', ' ')} · ${new Date(selected.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` : ''}
+              </Text>
+
+              {selected?.image_url ? (
+                <Image source={{ uri: selected.image_url }} style={[styles.detailImg, { borderColor: c.border }]} resizeMode="cover" />
+              ) : null}
+
+              {/* items */}
+              {(selected?.food_items ?? []).map((it, i) => (
+                <View key={i} style={[styles.detailItem, { borderBottomColor: c.border }]}>
+                  <Text style={[styles.detailItemName, { color: c.text, fontFamily: fonts.body }]}>{it.name}</Text>
+                  <Text style={[styles.detailItemQty, { color: c.textMuted, fontFamily: fonts.sans }]}>{it.quantity}{it.unit}</Text>
+                </View>
+              ))}
+
+              {/* macros + micros */}
+              <View style={{ marginTop: spacing.md }}>
+                {selected && <MacroBars total={logTotal(selected)} />}
+              </View>
+
+              {selected?.user_correction ? (
+                <Text style={[styles.detailMeta, { color: c.textMuted, fontFamily: fonts.bodyItalic, marginTop: spacing.sm }]}>
+                  Your portion note: {selected.user_correction.replace('_', ' ')}
+                </Text>
+              ) : null}
+
+              <View style={styles.detailBtns}>
+                <Button label="Delete" onPress={() => { if (selected) { confirmDelete(selected.id); setSelected(null); } }} variant="ghost" style={{ flex: 1 }} />
+                <Button label={reanalyzing ? 'Re-analysing…' : 'Re-analyse'} onPress={() => selected && reanalyse(selected)} loading={reanalyzing} disabled={!selected?.image_url} style={{ flex: 1 }} />
+              </View>
+              {!selected?.image_url && (
+                <Text style={[styles.detailMeta, { color: c.textMuted, fontFamily: fonts.bodyItalic, textAlign: 'center', marginTop: 6 }]}>No saved photo — can't re-analyse</Text>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -172,6 +259,16 @@ const styles = StyleSheet.create({
   logName: { fontSize: 14, lineHeight: 20 },
   macroRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   macroChip: { fontSize: 11 },
+  detailOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+  detailSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, padding: spacing.lg, maxHeight: '88%' },
+  detailHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  detailTitle: { fontSize: 20, letterSpacing: -0.3, flex: 1 },
+  detailMeta: { fontSize: 12, letterSpacing: 0.3, marginTop: 2 },
+  detailImg: { width: '100%', height: 200, borderRadius: radius.md, borderWidth: 1, marginTop: spacing.md },
+  detailItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, marginTop: 2 },
+  detailItemName: { fontSize: 14, flex: 1 },
+  detailItemQty: { fontSize: 13 },
+  detailBtns: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
   logCal: { fontSize: 18, fontWeight: '700' },
   logCalUnit: { fontSize: 10, letterSpacing: 1, textTransform: 'uppercase' },
   correctionBadge: { marginTop: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },

@@ -41,6 +41,7 @@ interface FoodState {
     total: { calories: number; protein: number; carbs: number; fat: number; [k: string]: number };
   }) => Promise<string | null>;
   updateCorrection: (logId: string, correction: QuantityFeedback) => Promise<void>;
+  updateLogAnalysis: (logId: string, items: FoodItem[], total: { calories: number; protein: number; carbs: number; fat: number; [k: string]: number }) => Promise<void>;
   deleteLog: (logId: string) => Promise<void>;
   fetchWater: (userId: string) => Promise<number>;
   addWater: (userId: string, amount_ml: number) => Promise<void>;
@@ -169,6 +170,33 @@ export const useFoodStore = create<FoodState>((set, get) => ({
     set(s => ({
       todayLogs: s.todayLogs.map(l => l.id === logId ? { ...l, user_correction: correction } : l),
     }));
+  },
+
+  updateLogAnalysis: async (logId, items, total) => {
+    await supabase.from('food_logs').update({
+      total_calories: total.calories, total_protein: total.protein, total_carbs: total.carbs, total_fat: total.fat,
+      total_fiber_g: total.fiber_g ?? 0, total_sugar_g: total.sugar_g ?? 0, total_sodium_mg: total.sodium_mg ?? 0,
+      total_potassium_mg: total.potassium_mg ?? 0, total_calcium_mg: total.calcium_mg ?? 0, total_iron_mg: total.iron_mg ?? 0, total_vitamin_c_mg: total.vitamin_c_mg ?? 0,
+    }).eq('id', logId);
+    await supabase.from('food_items').delete().eq('food_log_id', logId);
+    if (items.length > 0) {
+      await supabase.from('food_items').insert(items.map(it => ({
+        food_log_id: logId, name: it.name, quantity: it.quantity, unit: it.unit,
+        calories: it.calories, protein: it.protein, carbs: it.carbs, fat: it.fat,
+        fiber_g: it.fiber_g ?? 0, sugar_g: it.sugar_g ?? 0, sodium_mg: it.sodium_mg ?? 0,
+        potassium_mg: it.potassium_mg ?? 0, calcium_mg: it.calcium_mg ?? 0, iron_mg: it.iron_mg ?? 0, vitamin_c_mg: it.vitamin_c_mg ?? 0,
+      })));
+    }
+    set(s => {
+      const logs = s.todayLogs.map(l => l.id === logId ? {
+        ...l, food_items: items,
+        total_calories: total.calories, total_protein: total.protein, total_carbs: total.carbs, total_fat: total.fat,
+        total_fiber_g: total.fiber_g ?? 0, total_sugar_g: total.sugar_g ?? 0, total_sodium_mg: total.sodium_mg ?? 0,
+        total_potassium_mg: total.potassium_mg ?? 0, total_calcium_mg: total.calcium_mg ?? 0, total_iron_mg: total.iron_mg ?? 0, total_vitamin_c_mg: total.vitamin_c_mg ?? 0,
+      } as FoodLog : l);
+      const nutrition = sumNutrition(logs); nutrition.water_ml = s.todayNutrition.water_ml;
+      return { todayLogs: logs, todayNutrition: nutrition };
+    });
   },
 
   deleteLog: async (logId) => {

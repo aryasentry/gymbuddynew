@@ -187,7 +187,7 @@ export const useFoodStore = create<FoodState>((set, get) => ({
       .select('amount_ml')
       .eq('user_id', userId)
       .eq('logged_at', today)
-      .single();
+      .maybeSingle();
     const ml = data?.amount_ml ?? 0;
     set(s => ({ todayNutrition: { ...s.todayNutrition, water_ml: ml } }));
     return ml;
@@ -200,7 +200,7 @@ export const useFoodStore = create<FoodState>((set, get) => ({
       .select('id, amount_ml')
       .eq('user_id', userId)
       .eq('logged_at', today)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       const newTotal = existing.amount_ml + amount_ml;

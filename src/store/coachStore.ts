@@ -61,7 +61,7 @@ export const useCoachStore = create<CoachState>((set, get) => ({
       .eq('ended', false)
       .order('updated_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (!session) {
       const { data: created } = await supabase

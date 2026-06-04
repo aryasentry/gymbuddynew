@@ -31,7 +31,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       .from('profiles')
       .select('*')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
     set({ profile: data ?? null, loading: false });
   },
 

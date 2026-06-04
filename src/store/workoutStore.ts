@@ -74,10 +74,19 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   },
 
   fetchStreak: async (userId) => {
-    const { data } = await supabase
-      .from('workouts').select('logged_at')
-      .eq('user_id', userId).order('logged_at', { ascending: false }).limit(365);
-    set({ streak: computeStreak((data ?? []).map(r => r.logged_at as string)) });
+    // Only count a day if a workout that day had a completed set or a cardio segment.
+    let res: any = await supabase
+      .from('workouts').select('logged_at, exercises(sets(completed), cardio_segments(id))')
+      .eq('user_id', userId).order('logged_at', { ascending: false }).limit(200);
+    if (res.error) {
+      res = await supabase.from('workouts').select('logged_at, exercises(sets(completed))')
+        .eq('user_id', userId).order('logged_at', { ascending: false }).limit(200);
+    }
+    const dates = (res.data ?? [])
+      .filter((w: any) => (w.exercises ?? []).some((e: any) =>
+        (e.sets ?? []).some((s: any) => s.completed) || (e.cardio_segments ?? []).length > 0))
+      .map((w: any) => w.logged_at as string);
+    set({ streak: computeStreak(dates) });
   },
 
   fetchWorkouts: async (userId, limit = 20) => {

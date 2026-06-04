@@ -77,7 +77,12 @@ export function PlannerModal({ visible, onClose, onStarted }: Props) {
       <View style={styles.overlay}>
         <View style={[styles.sheet, { backgroundColor: c.surfaceAlt, borderColor: c.border, paddingBottom: insets.bottom + spacing.lg }]}>
           <ScrollView showsVerticalScrollIndicator={false}>
-            <Text style={[styles.title, { color: c.text, fontFamily: fonts.headingLoaded }]}>Plan with AI ✨</Text>
+            <View style={styles.headRow}>
+              <Text style={[styles.title, { color: c.text, fontFamily: fonts.headingLoaded }]}>Plan with AI ✨</Text>
+              <TouchableOpacity onPress={() => { reset(); onClose(); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={{ color: c.textMuted, fontSize: 18 }}>✕</Text>
+              </TouchableOpacity>
+            </View>
             <Text style={[styles.sub, { color: c.textMuted, fontFamily: fonts.bodyItalic }]}>
               Dump your workout idea — AI structures it into sets you can start and tick off.
             </Text>
@@ -151,6 +156,7 @@ export function PlannerModal({ visible, onClose, onStarted }: Props) {
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, padding: spacing.lg, maxHeight: '88%' },
+  headRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { fontSize: 22 },
   sub: { fontSize: 13, marginTop: 2, marginBottom: spacing.md, lineHeight: 18 },
   input: { borderWidth: 1, borderRadius: radius.md, padding: 14, fontSize: 15, minHeight: 90, textAlignVertical: 'top' },

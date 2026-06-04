@@ -16,7 +16,7 @@ import { MuscleMap } from '../../components/workout/MuscleMap';
 import { fonts, spacing, radius } from '../../theme';
 import { useTheme } from '../../theme/useTheme';
 import { epley1RM, bestSet, totalVolume, findLastTime, findPR, formatSets, cardioCalories } from '../../utils/workout';
-import { musclesWorked, musclesForExercise, MUSCLE_LABEL } from '../../utils/muscles';
+import { musclesWorked, musclesForExercise, MUSCLE_LABEL, ALL_MUSCLES } from '../../utils/muscles';
 import { classifyMuscles } from '../../lib/groq';
 import { haptic } from '../../utils/haptics';
 import { WorkoutCategory, CardioActivity, ExerciseKind, Muscle } from '../../types';
@@ -70,6 +70,9 @@ export function WorkoutScreen() {
   const [showPlans, setShowPlans] = useState(false);
   const [musclePopup, setMusclePopup] = useState<{ name: string; muscles: Set<Muscle> } | null>(null);
   const [popupLoading, setPopupLoading] = useState(false);
+  const [viewStart, setViewStart] = useState(false); // show start screen even when a session exists
+
+  const showStartScreen = !todayWorkout || viewStart;
 
   async function openMuscles(ex: typeof todayWorkout extends null ? never : any) {
     haptic.light();
@@ -80,7 +83,7 @@ export function WorkoutScreen() {
       setPopupLoading(true);
       try {
         const map = await classifyMuscles([ex.name]);
-        const found = (Object.values(map)[0] ?? []) as Muscle[];
+        const found = ((Object.values(map)[0] ?? []) as string[]).filter(m => (ALL_MUSCLES as string[]).includes(m)) as Muscle[];
         if (found.length) {
           await setExerciseMuscles(ex.id, found);
           setMusclePopup({ name: ex.name, muscles: new Set(found) });
@@ -92,7 +95,7 @@ export function WorkoutScreen() {
 
   async function startSavedPlan(p: typeof plans[number]) {
     if (!user) return;
-    setShowPlans(false);
+    setShowPlans(false); setViewStart(false);
     await startPlan(user.id, p, weight);
     haptic.success();
   }
@@ -119,7 +122,7 @@ export function WorkoutScreen() {
   async function handleCreateWorkout() {
     if (!workoutName.trim() || !user) return;
     await createWorkout(user.id, workoutName.trim(), workoutDesc.trim() || undefined, category);
-    setWorkoutName(''); setWorkoutDesc(''); setShowNewWorkout(false);
+    setWorkoutName(''); setWorkoutDesc(''); setShowNewWorkout(false); setViewStart(false);
   }
 
   async function handleAddExercise() {
@@ -181,7 +184,7 @@ export function WorkoutScreen() {
     try {
       const map = await classifyMuscles(unknown);
       const merged = new Set<Muscle>(local);
-      Object.values(map).flat().forEach(m => { if (m) merged.add(m as Muscle); });
+      Object.values(map).flat().forEach(m => { if (m && (ALL_MUSCLES as string[]).includes(m)) merged.add(m as Muscle); });
       setFinishMuscles(merged);
     } catch { /* keep local */ }
     setClassifying(false);
@@ -198,9 +201,14 @@ export function WorkoutScreen() {
           <TouchableOpacity onPress={() => setShowPlans(true)}><Text style={{ fontSize: 17 }}>📋</Text></TouchableOpacity>
           <TouchableOpacity onPress={() => setShowPlanner(true)}><Text style={{ fontSize: 16 }}>✨</Text></TouchableOpacity>
           <TouchableOpacity onPress={() => setShowPlates(true)}><Text style={{ fontSize: 17 }}>🏋</Text></TouchableOpacity>
-          {!todayWorkout
+          {showStartScreen
             ? <TouchableOpacity onPress={() => setShowNewWorkout(true)}><Text style={{ fontSize: 22, color: c.accent }}>+</Text></TouchableOpacity>
-            : <TouchableOpacity onPress={() => setShowAddExercise(true)}><Text style={{ fontFamily: fonts.sans, fontSize: 11, letterSpacing: 1, color: c.accent }}>+ EXERCISE</Text></TouchableOpacity>}
+            : (
+              <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
+                <TouchableOpacity onPress={() => setShowAddExercise(true)}><Text style={{ fontFamily: fonts.sans, fontSize: 11, letterSpacing: 1, color: c.accent }}>+ EXERCISE</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => setViewStart(true)}><Text style={{ fontSize: 18, color: c.textMuted }}>✕</Text></TouchableOpacity>
+              </View>
+            )}
         </View>
       } />
 
@@ -216,10 +224,13 @@ export function WorkoutScreen() {
           </View>
         )}
 
-        {!todayWorkout ? (
+        {showStartScreen ? (
           <View style={styles.emptyWrap}>
-            <Text style={[styles.emptyTitle, { color: c.text, fontFamily: fonts.headingLoaded }]}>No workout today</Text>
-            <Text style={[styles.emptySub, { color: c.textMuted, fontFamily: fonts.bodyItalic }]}>Plan one with AI, or start an empty session and add as you go.</Text>
+            {todayWorkout && (
+              <Button label={`▸ Resume ${todayWorkout.name}`} onPress={() => setViewStart(false)} style={{ marginBottom: spacing.md, alignSelf: 'stretch' }} />
+            )}
+            <Text style={[styles.emptyTitle, { color: c.text, fontFamily: fonts.headingLoaded }]}>{todayWorkout ? 'Start another' : 'No workout today'}</Text>
+            <Text style={[styles.emptySub, { color: c.textMuted, fontFamily: fonts.bodyItalic }]}>Plan one with AI, browse 📋 plans, or start an empty session.</Text>
             <Button label="✨ Plan with AI" onPress={() => setShowPlanner(true)} style={{ marginTop: spacing.lg }} />
             <Button label="Start empty session" onPress={() => setShowNewWorkout(true)} variant="outline" style={{ marginTop: spacing.sm }} />
           </View>
@@ -425,7 +436,7 @@ export function WorkoutScreen() {
 
       {showTimer && <RestTimer seconds={90} onDismiss={() => setShowTimer(false)} />}
       <PlateCalculator visible={showPlates} onClose={() => setShowPlates(false)} />
-      <PlannerModal visible={showPlanner} onClose={() => setShowPlanner(false)} onStarted={() => setShowPlanner(false)} />
+      <PlannerModal visible={showPlanner} onClose={() => setShowPlanner(false)} onStarted={() => { setShowPlanner(false); setViewStart(false); }} />
 
       {/* Saved plans */}
       <Modal visible={showPlans} transparent animationType="slide" onRequestClose={() => setShowPlans(false)}>

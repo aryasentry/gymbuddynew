@@ -46,13 +46,15 @@ export function ProgressScreen() {
     const [foods, weights, workouts] = await Promise.all([
       supabase.from('food_logs').select('logged_at, total_calories, total_protein').eq('user_id', user.id).gte('logged_at', startStr),
       supabase.from('weight_logs').select('logged_at, weight_kg').eq('user_id', user.id).gte('logged_at', startStr),
-      supabase.from('workouts').select('logged_at').eq('user_id', user.id).gte('logged_at', startStr),
+      supabase.from('workouts').select('logged_at, exercises(sets(completed), cardio_segments(id))').eq('user_id', user.id).gte('logged_at', startStr),
     ]);
 
     const cal: Record<string, number> = {}, pro: Record<string, number> = {}, wt: Record<string, number> = {};
     for (const f of foods.data ?? []) { cal[f.logged_at] = (cal[f.logged_at] ?? 0) + f.total_calories; pro[f.logged_at] = (pro[f.logged_at] ?? 0) + f.total_protein; }
     for (const w of weights.data ?? []) wt[w.logged_at] = w.weight_kg;
-    const gym = new Set((workouts.data ?? []).map((w: any) => w.logged_at));
+    const gym = new Set((workouts.data ?? [])
+      .filter((w: any) => (w.exercises ?? []).some((e: any) => (e.sets ?? []).some((s: any) => s.completed) || (e.cardio_segments ?? []).length > 0))
+      .map((w: any) => w.logged_at));
 
     const wS: ChartPoint[] = [], cS: ChartPoint[] = [], pS: ChartPoint[] = [];
     for (let i = 0; i < DAYS; i++) {
@@ -77,7 +79,7 @@ export function ProgressScreen() {
 
     const [foods, workouts, weights, waters, wlog] = await Promise.all([
       supabase.from('food_logs').select('logged_at, caption, total_calories, total_protein, total_carbs, total_fat, image_url, food_items(name)').eq('user_id', user.id).gte('logged_at', start).lte('logged_at', end),
-      supabase.from('workouts').select('logged_at, name, exercises(name, sets(weight_kg, reps))').eq('user_id', user.id).gte('logged_at', start).lte('logged_at', end),
+      supabase.from('workouts').select('logged_at, name, exercises(name, kind, sets(weight_kg, reps, completed), cardio_segments(calories))').eq('user_id', user.id).gte('logged_at', start).lte('logged_at', end),
       supabase.from('weight_logs').select('logged_at, weight_kg').eq('user_id', user.id).gte('logged_at', start).lte('logged_at', end),
       supabase.from('water_logs').select('logged_at, amount_ml').eq('user_id', user.id).gte('logged_at', start).lte('logged_at', end),
       supabase.from('weight_logs').select('*').eq('user_id', user.id).order('logged_at', { ascending: false }).limit(14),
@@ -89,10 +91,17 @@ export function ProgressScreen() {
       caption: f.caption ?? (f as any).food_items?.map((i: any) => i.name).join(', ') ?? 'Meal',
       calories: f.total_calories, protein: f.total_protein, carbs: f.total_carbs, fat: f.total_fat, image_url: f.image_url ?? undefined,
     });
-    for (const w of workouts.data ?? []) ensure(w.logged_at).workouts.push({
-      name: w.name,
-      sets: ((w as any).exercises ?? []).map((e: any) => `${e.name}: ${(e.sets ?? []).map((s: any) => `${s.weight_kg}×${s.reps}`).join(' ')}`),
-    });
+    for (const w of workouts.data ?? []) {
+      // only count exercises with completed sets / cardio done — ignore planned-but-not-done
+      const exs = ((w as any).exercises ?? []).map((e: any) => {
+        const doneSets = (e.sets ?? []).filter((s: any) => s.completed);
+        const cardio = (e.cardio_segments ?? []);
+        if (e.kind === 'cardio' && cardio.length) return `${e.name}: ${cardio.reduce((a: number, c: any) => a + (c.calories || 0), 0)} kcal`;
+        if (doneSets.length) return `${e.name}: ${doneSets.map((s: any) => `${s.weight_kg}×${s.reps}`).join(' ')}`;
+        return null;
+      }).filter(Boolean) as string[];
+      if (exs.length) ensure(w.logged_at).workouts.push({ name: w.name, sets: exs });
+    }
     for (const wt of weights.data ?? []) ensure(wt.logged_at).weight = wt.weight_kg;
     for (const wa of waters.data ?? []) ensure(wa.logged_at).water = wa.amount_ml;
     setData(map);

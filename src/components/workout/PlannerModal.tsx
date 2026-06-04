@@ -8,8 +8,10 @@ import { generateWorkoutPlan } from '../../lib/groq';
 import { useAuthStore } from '../../store/authStore';
 import { useProfileStore } from '../../store/profileStore';
 import { useWorkoutStore } from '../../store/workoutStore';
-import { WorkoutPlan } from '../../types';
+import { WorkoutPlan, Muscle } from '../../types';
 import { haptic } from '../../utils/haptics';
+import { musclesForExercise } from '../../utils/muscles';
+import { MuscleMap } from './MuscleMap';
 
 interface Props {
   visible: boolean;
@@ -28,7 +30,8 @@ export function PlannerModal({ visible, onClose, onStarted }: Props) {
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const { profile } = useProfileStore();
-  const { createFromPlan } = useWorkoutStore();
+  const { createFromPlan, savePlan } = useWorkoutStore();
+  const [saved, setSaved] = useState(false);
 
   const [text, setText] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -57,7 +60,17 @@ export function PlannerModal({ visible, onClose, onStarted }: Props) {
     onStarted();
   }
 
-  function reset() { setText(''); setPlan(null); setError(''); }
+  async function savePlanHandler() {
+    if (!plan || !user) return;
+    await savePlan(user.id, plan);
+    setSaved(true);
+    haptic.success();
+  }
+
+  function reset() { setText(''); setPlan(null); setError(''); setSaved(false); }
+
+  const planMuscles = new Set<Muscle>();
+  plan?.exercises.forEach(e => musclesForExercise(e.name).forEach(m => planMuscles.add(m)));
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -116,9 +129,15 @@ export function PlannerModal({ visible, onClose, onStarted }: Props) {
                   </View>
                 ))}
 
+                {/* muscle map preview of the whole plan */}
+                <View style={{ marginTop: spacing.sm }}>
+                  <MuscleMap active={planMuscles} />
+                </View>
+
                 <View style={styles.btns}>
-                  <Button label="Redo" onPress={() => setPlan(null)} variant="outline" style={{ flex: 1 }} />
-                  <Button label="Start workout" onPress={start} loading={starting} style={{ flex: 1 }} />
+                  <Button label="Redo" onPress={() => setPlan(null)} variant="ghost" style={{ flex: 1 }} />
+                  <Button label={saved ? 'Saved ✓' : 'Save plan'} onPress={savePlanHandler} variant="outline" style={{ flex: 1 }} />
+                  <Button label="Start" onPress={start} loading={starting} style={{ flex: 1 }} />
                 </View>
               </>
             )}

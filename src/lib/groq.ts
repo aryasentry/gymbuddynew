@@ -154,6 +154,24 @@ Return ONLY valid JSON, no markdown:
   return JSON.parse(raw) as WorkoutPlan;
 }
 
+// Classify unknown exercises → target muscles (for the muscle map when not in the local list).
+export async function classifyMuscles(names: string[]): Promise<Record<string, string[]>> {
+  if (names.length === 0) return {};
+  const data = await groqRequest({
+    model: CHAT_MODEL,
+    messages: [
+      { role: 'system', content: 'Map each exercise to the muscles it trains. Use ONLY these exact muscle keys: chest, shoulders, biceps, triceps, forearms, abs, quads, hamstrings, calves, glutes, back, lats, traps. Return ONLY JSON: {"Exercise Name": ["muscle", ...]}.' },
+      { role: 'user', content: names.join('\n') },
+    ],
+    max_tokens: 400,
+    temperature: 0.1,
+  });
+  let raw = (data.choices[0].message.content ?? '').trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  const first = raw.indexOf('{'); const last = raw.lastIndexOf('}');
+  if (first !== -1 && last !== -1) raw = raw.slice(first, last + 1);
+  try { return JSON.parse(raw); } catch { return {}; }
+}
+
 export async function askCoach(
   question: string,
   profile: Profile,

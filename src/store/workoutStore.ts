@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
-import { Workout, Exercise, Set, CardioSegment, WorkoutPlan, WorkoutCategory, ExerciseKind } from '../types';
+import { Workout, Exercise, Set, CardioSegment, WorkoutPlan, WorkoutCategory, ExerciseKind, SavedPlan } from '../types';
 import { todayISO } from '../utils/nutrition';
 import { computeStreak, cardioCalories } from '../utils/workout';
 
@@ -15,6 +15,11 @@ interface WorkoutState {
   todayWorkout: Workout | null;
   loading: boolean;
   streak: { current: number; longest: number };
+  plans: SavedPlan[];
+  fetchPlans: (userId: string) => Promise<void>;
+  savePlan: (userId: string, plan: WorkoutPlan) => Promise<void>;
+  deletePlan: (planId: string) => Promise<void>;
+  startPlan: (userId: string, plan: SavedPlan, weightKg: number) => Promise<Workout | null>;
   fetchWorkouts: (userId: string, limit?: number) => Promise<void>;
   fetchToday: (userId: string) => Promise<void>;
   fetchStreak: (userId: string) => Promise<void>;
@@ -36,6 +41,36 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   todayWorkout: null,
   loading: false,
   streak: { current: 0, longest: 0 },
+  plans: [],
+
+  fetchPlans: async (userId) => {
+    const { data } = await supabase
+      .from('workout_plans').select('*')
+      .eq('user_id', userId)
+      .order('last_used', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false });
+    set({ plans: (data ?? []) as SavedPlan[] });
+  },
+
+  savePlan: async (userId, plan) => {
+    const { data } = await supabase
+      .from('workout_plans')
+      .insert({ user_id: userId, name: plan.name, category: plan.category, description: plan.description, plan })
+      .select().single();
+    if (data) set(s => ({ plans: [data as SavedPlan, ...s.plans] }));
+  },
+
+  deletePlan: async (planId) => {
+    await supabase.from('workout_plans').delete().eq('id', planId);
+    set(s => ({ plans: s.plans.filter(p => p.id !== planId) }));
+  },
+
+  startPlan: async (userId, saved, weightKg) => {
+    const w = await get().createFromPlan(userId, saved.plan, weightKg);
+    await supabase.from('workout_plans').update({ use_count: (saved.use_count ?? 0) + 1, last_used: new Date().toISOString() }).eq('id', saved.id);
+    set(s => ({ plans: s.plans.map(p => p.id === saved.id ? { ...p, use_count: (p.use_count ?? 0) + 1, last_used: new Date().toISOString() } : p) }));
+    return w;
+  },
 
   fetchStreak: async (userId) => {
     const { data } = await supabase

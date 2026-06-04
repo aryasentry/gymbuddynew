@@ -171,6 +171,23 @@ export interface WorkoutPlan {
   exercises: PlanExercise[];
 }
 
+// A saved, reusable plan (template) row
+export interface SavedPlan {
+  id: string;
+  user_id: string;
+  name: string;
+  category?: WorkoutCategory;
+  description?: string;
+  plan: WorkoutPlan;
+  use_count: number;
+  last_used?: string;
+  created_at: string;
+}
+
+export type Muscle =
+  | 'chest' | 'shoulders' | 'biceps' | 'triceps' | 'forearms' | 'abs'
+  | 'quads' | 'hamstrings' | 'calves' | 'glutes' | 'back' | 'lats' | 'traps';
+
 export type ReminderKind = 'meal' | 'workout' | 'water' | 'weight' | 'custom';
 
 export interface Reminder {

@@ -12,11 +12,15 @@ import { Button } from '../../components/common/Button';
 import { RestTimer } from '../../components/workout/RestTimer';
 import { PlateCalculator } from '../../components/workout/PlateCalculator';
 import { PlannerModal } from '../../components/workout/PlannerModal';
+import { MuscleMap } from '../../components/workout/MuscleMap';
 import { fonts, spacing, radius } from '../../theme';
 import { useTheme } from '../../theme/useTheme';
 import { epley1RM, bestSet, totalVolume, findLastTime, findPR, formatSets, cardioCalories } from '../../utils/workout';
+import { musclesWorked, musclesForExercise, MUSCLE_LABEL } from '../../utils/muscles';
+import { classifyMuscles } from '../../lib/groq';
 import { haptic } from '../../utils/haptics';
-import { WorkoutCategory, CardioActivity, ExerciseKind } from '../../types';
+import { WorkoutCategory, CardioActivity, ExerciseKind, Muscle } from '../../types';
+import { ActivityIndicator } from 'react-native';
 
 const QUICK_STRENGTH = ['Bench Press', 'Squat', 'Deadlift', 'Pull Up', 'Overhead Press', 'Barbell Row', 'Bicep Curl', 'Tricep Pushdown', 'Lat Pulldown', 'Leg Press'];
 const QUICK_CARDIO = ['Treadmill', 'Cycling'];
@@ -29,8 +33,8 @@ export function WorkoutScreen() {
   const { user } = useAuthStore();
   const { profile, updateWeight } = useProfileStore();
   const {
-    todayWorkout, workouts, streak,
-    fetchToday, fetchWorkouts, fetchStreak,
+    todayWorkout, workouts, streak, plans,
+    fetchToday, fetchWorkouts, fetchStreak, fetchPlans, startPlan, deletePlan,
     createWorkout, updateWorkoutMeta, addExercise, addSet, toggleSet, deleteSet,
     addCardioSegment, deleteCardioSegment, deleteExercise,
   } = useWorkoutStore();
@@ -60,6 +64,17 @@ export function WorkoutScreen() {
   const [descDraft, setDescDraft] = useState('');
   const [bw, setBw] = useState('');
   const [bwSaved, setBwSaved] = useState(false);
+  const [showFinish, setShowFinish] = useState(false);
+  const [finishMuscles, setFinishMuscles] = useState<Set<Muscle>>(new Set());
+  const [classifying, setClassifying] = useState(false);
+  const [showPlans, setShowPlans] = useState(false);
+
+  async function startSavedPlan(p: typeof plans[number]) {
+    if (!user) return;
+    setShowPlans(false);
+    await startPlan(user.id, p, weight);
+    haptic.success();
+  }
 
   async function logBodyWeight() {
     const w = parseFloat(bw);
@@ -71,7 +86,7 @@ export function WorkoutScreen() {
   }
 
   useFocusEffect(useCallback(() => {
-    if (user?.id) { fetchToday(user.id); fetchWorkouts(user.id, 30); fetchStreak(user.id); }
+    if (user?.id) { fetchToday(user.id); fetchWorkouts(user.id, 30); fetchStreak(user.id); fetchPlans(user.id); }
   }, [user?.id]));
 
   async function onRefresh() {
@@ -129,12 +144,26 @@ export function WorkoutScreen() {
   const totalSets = allStrengthSets.length;
   const totalVol = allStrengthSets.filter(s => s.completed).reduce((a, s) => a + s.weight_kg * s.reps, 0);
 
-  function finishSession() {
+  async function finishSession() {
     haptic.success();
-    const parts = [`${doneSets}/${totalSets} sets done`];
-    if (totalVol > 0) parts.push(`${totalVol} kg volume`);
-    if (cardioTotal > 0) parts.push(`~${cardioTotal} kcal cardio`);
-    Alert.alert('Workout saved ✓', `${parts.join(' · ')}\n\nEverything's already saved. You can reopen and keep editing today's session anytime.`);
+    // local muscle map from completed exercises
+    const local = musclesWorked(todayWorkout);
+    setFinishMuscles(local);
+    setShowFinish(true);
+    // unknown completed exercises → let AI classify their muscles (generates the red regions)
+    const unknown = (todayWorkout?.exercises ?? []).filter(e => {
+      const done = e.kind === 'cardio' ? (e.cardio_segments ?? []).length > 0 : e.sets.some(s => s.completed);
+      return done && e.kind !== 'cardio' && musclesForExercise(e.name).length === 0;
+    }).map(e => e.name);
+    if (unknown.length === 0) return;
+    setClassifying(true);
+    try {
+      const map = await classifyMuscles(unknown);
+      const merged = new Set<Muscle>(local);
+      Object.values(map).flat().forEach(m => { if (m) merged.add(m as Muscle); });
+      setFinishMuscles(merged);
+    } catch { /* keep local */ }
+    setClassifying(false);
   }
 
   function inputStyle() {
@@ -145,6 +174,7 @@ export function WorkoutScreen() {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <TopBar logo right={
         <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
+          <TouchableOpacity onPress={() => setShowPlans(true)}><Text style={{ fontSize: 17 }}>📋</Text></TouchableOpacity>
           <TouchableOpacity onPress={() => setShowPlanner(true)}><Text style={{ fontSize: 16 }}>✨</Text></TouchableOpacity>
           <TouchableOpacity onPress={() => setShowPlates(true)}><Text style={{ fontSize: 17 }}>🏋</Text></TouchableOpacity>
           {!todayWorkout
@@ -374,6 +404,82 @@ export function WorkoutScreen() {
       <PlateCalculator visible={showPlates} onClose={() => setShowPlates(false)} />
       <PlannerModal visible={showPlanner} onClose={() => setShowPlanner(false)} onStarted={() => setShowPlanner(false)} />
 
+      {/* Saved plans */}
+      <Modal visible={showPlans} transparent animationType="slide" onRequestClose={() => setShowPlans(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={[styles.modalTitle, { color: c.text, fontFamily: fonts.headingLoaded }]}>My plans</Text>
+              <TouchableOpacity onPress={() => { setShowPlans(false); setShowPlanner(true); }}>
+                <Text style={{ color: c.accent, fontFamily: fonts.sans, fontSize: 12, letterSpacing: 1 }}>+ NEW (AI)</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+              {plans.length === 0 ? (
+                <Text style={[styles.noExText, { color: c.textMuted, fontFamily: fonts.bodyItalic }]}>No saved plans. Make one with ✨ Plan with AI → Save plan.</Text>
+              ) : plans.map(p => (
+                <TouchableOpacity
+                  key={p.id}
+                  onPress={() => startSavedPlan(p)}
+                  onLongPress={() => Alert.alert('Delete plan', p.name, [
+                    { text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => deletePlan(p.id) },
+                  ])}
+                  style={[styles.planRow, { borderColor: c.border, backgroundColor: c.surface }]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.planRowName, { color: c.text, fontFamily: fonts.body }]}>{p.name}{p.category ? ` · ${p.category}` : ''}</Text>
+                    <Text style={[styles.planRowMeta, { color: c.textMuted, fontFamily: fonts.sans }]}>
+                      {(p.plan.exercises ?? []).length} exercises{p.use_count ? ` · used ${p.use_count}×` : ''}
+                    </Text>
+                  </View>
+                  <Text style={{ color: c.accent, fontSize: 16 }}>▶</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <Button label="Close" onPress={() => setShowPlans(false)} variant="ghost" />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Finish analysis — muscle map of what was worked */}
+      <Modal visible={showFinish} transparent animationType="slide" onRequestClose={() => setShowFinish(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={[styles.modalTitle, { color: c.text, fontFamily: fonts.headingLoaded }]}>Workout complete ✓</Text>
+              <Text style={[styles.finishStats, { color: c.textMuted, fontFamily: fonts.sans }]}>
+                {doneSets}/{totalSets} sets{totalVol > 0 ? ` · ${totalVol} kg volume` : ''}{cardioTotal > 0 ? ` · ~${cardioTotal} kcal cardio` : ''}
+              </Text>
+
+              <MuscleMap active={finishMuscles} />
+
+              {classifying && (
+                <View style={styles.classifyRow}>
+                  <ActivityIndicator size="small" color={c.accent} />
+                  <Text style={[styles.finishStats, { color: c.textMuted, fontFamily: fonts.bodyItalic }]}>AI mapping new exercises…</Text>
+                </View>
+              )}
+
+              <View style={styles.muscleChips}>
+                {[...finishMuscles].map(m => (
+                  <View key={m} style={[styles.muscleChip, { backgroundColor: c.accentBg, borderColor: c.accentBorder }]}>
+                    <Text style={[styles.muscleChipText, { color: c.accent, fontFamily: fonts.sans }]}>{MUSCLE_LABEL[m]}</Text>
+                  </View>
+                ))}
+                {finishMuscles.size === 0 && !classifying && (
+                  <Text style={[styles.finishStats, { color: c.textMuted, fontFamily: fonts.bodyItalic }]}>Complete some sets to map muscles.</Text>
+                )}
+              </View>
+
+              <Text style={[styles.finishNote, { color: c.textMuted, fontFamily: fonts.bodyItalic }]}>
+                Saved to your history & PRs. Reopen anytime to keep editing.
+              </Text>
+              <Button label="Done" onPress={() => setShowFinish(false)} style={{ marginTop: spacing.sm }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* New workout modal */}
       <Modal visible={showNewWorkout} transparent animationType="slide">
         <View style={styles.modalOverlay}>
@@ -517,4 +623,13 @@ const styles = StyleSheet.create({
   segBtn: { flex: 1, paddingVertical: 9, borderRadius: radius.sm, borderWidth: 1, alignItems: 'center' },
   modalInput: { borderWidth: 1, borderRadius: radius.md, padding: 12, fontSize: 15 },
   modalBtns: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
+  finishStats: { fontSize: 12, letterSpacing: 0.3, marginBottom: spacing.md },
+  classifyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', marginTop: 8 },
+  muscleChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.md, justifyContent: 'center' },
+  muscleChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  muscleChipText: { fontSize: 11, letterSpacing: 0.3 },
+  finishNote: { fontSize: 12, textAlign: 'center', marginTop: spacing.md },
+  planRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: radius.md, padding: 14, gap: 10, marginBottom: 8 },
+  planRowName: { fontSize: 15, textTransform: 'capitalize' },
+  planRowMeta: { fontSize: 11, marginTop: 2 },
 });

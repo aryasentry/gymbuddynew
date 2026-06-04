@@ -29,7 +29,8 @@ export function LogMealScreen() {
   const { profile } = useProfileStore();
   const { saveLog, searchFoods } = useFoodStore();
 
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [topUri, setTopUri] = useState<string | null>(null);
+  const [sideUri, setSideUri] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
   const [mealType, setMealType] = useState<MealType>('lunch');
   const [analyzing, setAnalyzing] = useState(false);
@@ -77,24 +78,31 @@ export function LogMealScreen() {
   const resultBg = c.accentBg;
   const resultBorder = c.accentBorder;
 
-  async function pickImage(fromCamera: boolean) {
+  async function pickImage(slot: 'top' | 'side', fromCamera: boolean) {
     if (fromCamera) {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) { setError('Camera permission denied'); return; }
     }
     const fn = fromCamera ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync;
     const result = await fn({ mediaTypes: ['images'], quality: 0.6, base64: false });
-    if (!result.canceled) setImageUri(result.assets[0].uri);
+    if (!result.canceled) {
+      if (slot === 'top') setTopUri(result.assets[0].uri); else setSideUri(result.assets[0].uri);
+    }
   }
 
   async function analyze() {
-    if (!imageUri) { setError('Add a photo first'); return; }
+    if (!topUri) { setError('Add the top-down photo first'); return; }
     if (!profile) { setError('Profile not loaded'); return; }
     setError('');
     setAnalyzing(true);
     try {
-      const base64 = await FileSystem.readAsStringAsync(imageUri, { encoding: FileSystem.EncodingType.Base64 });
-      const r = await analyzeFoodImage(base64, caption || 'food in image', profile);
+      const topB64 = await FileSystem.readAsStringAsync(topUri, { encoding: FileSystem.EncodingType.Base64 });
+      const imgs = [topB64];
+      if (sideUri) {
+        const sideB64 = await FileSystem.readAsStringAsync(sideUri, { encoding: FileSystem.EncodingType.Base64 });
+        imgs.push(sideB64);
+      }
+      const r = await analyzeFoodImage(imgs, caption || 'food in image', profile);
       setResult(r);
     } catch (e: any) {
       setError(e.message ?? 'Analysis failed');
@@ -106,10 +114,10 @@ export function LogMealScreen() {
   async function logMeal() {
     if (!result || !user) return;
     setSaving(true);
-    // upload the photo (best-effort; logs still save if storage isn't set up)
+    // upload the top photo (best-effort; logs still save if storage isn't set up)
     let image_url: string | undefined;
-    if (imageUri) {
-      const url = await uploadFoodImage(user.id, imageUri);
+    if (topUri) {
+      const url = await uploadFoodImage(user.id, topUri);
       if (url) image_url = url;
     }
     // apply the user's portion correction: nudge totals ±15% so the saved log reflects reality
@@ -149,24 +157,34 @@ export function LogMealScreen() {
         <TopBar showBack onBack={() => navigation.goBack()} title="Log a meal" />
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-          {/* Photo */}
-          {imageUri ? (
-            <TouchableOpacity onPress={() => setImageUri(null)}>
-              <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="cover" />
-              <Text style={[styles.retakeText, { color: accentColor, fontFamily: fonts.sans }]}>Tap to retake</Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.photoRow}>
-              <TouchableOpacity onPress={() => pickImage(true)} style={[styles.photoBtn, { borderColor, backgroundColor: surface }]}>
-                <Text style={styles.photoIcon}>📷</Text>
-                <Text style={[styles.photoBtnLabel, { color: mutedColor, fontFamily: fonts.sans }]}>Camera</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => pickImage(false)} style={[styles.photoBtn, { borderColor, backgroundColor: surface }]}>
-                <Text style={styles.photoIcon}>🖼</Text>
-                <Text style={[styles.photoBtnLabel, { color: mutedColor, fontFamily: fonts.sans }]}>Gallery</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          {/* Two-angle capture — top + side for accurate volume */}
+          <Text style={[styles.angleHint, { color: mutedColor, fontFamily: fonts.bodyItalic }]}>
+            2 photos = far better accuracy. Top shows the area, side shows the height.
+          </Text>
+          <View style={styles.slotRow}>
+            {([
+              { slot: 'top' as const, uri: topUri, set: setTopUri, num: '①', title: 'Top-down', sub: 'Required' },
+              { slot: 'side' as const, uri: sideUri, set: setSideUri, num: '②', title: 'Side angle', sub: 'Recommended' },
+            ]).map(s => (
+              <View key={s.slot} style={styles.slot}>
+                <Text style={[styles.slotTitle, { color: textColor, fontFamily: fonts.sans }]}>{s.num} {s.title}</Text>
+                {s.uri ? (
+                  <TouchableOpacity onPress={() => s.set(null)}>
+                    <Image source={{ uri: s.uri }} style={[styles.slotImg, { borderColor }]} resizeMode="cover" />
+                    <Text style={[styles.retakeText, { color: accentColor, fontFamily: fonts.sans }]}>Tap to retake</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={[styles.slotEmpty, { borderColor, backgroundColor: surface }]}>
+                    <View style={styles.slotBtns}>
+                      <TouchableOpacity onPress={() => pickImage(s.slot, true)} style={styles.slotBtn}><Text style={styles.photoIcon}>📷</Text></TouchableOpacity>
+                      <TouchableOpacity onPress={() => pickImage(s.slot, false)} style={styles.slotBtn}><Text style={styles.photoIcon}>🖼</Text></TouchableOpacity>
+                    </View>
+                    <Text style={[styles.slotSub, { color: s.slot === 'top' ? accentColor : mutedColor, fontFamily: fonts.sans }]}>{s.sub}</Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
 
           {/* Caption */}
           <Input
@@ -234,7 +252,7 @@ export function LogMealScreen() {
 
           {/* Analyse button */}
           {!result && (
-            <Button label="Analyse with AI" onPress={analyze} disabled={!imageUri} />
+            <Button label="Analyse with AI" onPress={analyze} disabled={!topUri} />
           )}
 
           {/* Result */}
@@ -297,12 +315,17 @@ export function LogMealScreen() {
 
 const styles = StyleSheet.create({
   scroll: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl },
-  preview: { width: '100%', height: 200, borderRadius: radius.md },
   retakeText: { fontSize: 12, textAlign: 'center', marginTop: 6, letterSpacing: 0.5 },
-  photoRow: { flexDirection: 'row', gap: spacing.md },
-  photoBtn: { flex: 1, height: 100, borderWidth: 1, borderRadius: radius.md, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 6 },
   photoIcon: { fontSize: 24 },
-  photoBtnLabel: { fontSize: 12, letterSpacing: 0.5 },
+  angleHint: { fontSize: 13, lineHeight: 18 },
+  slotRow: { flexDirection: 'row', gap: spacing.md },
+  slot: { flex: 1, gap: 6 },
+  slotTitle: { fontSize: 12, letterSpacing: 0.3 },
+  slotImg: { width: '100%', height: 130, borderRadius: radius.md, borderWidth: 1 },
+  slotEmpty: { height: 130, borderWidth: 1, borderRadius: radius.md, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  slotBtns: { flexDirection: 'row', gap: 16 },
+  slotBtn: { padding: 4 },
+  slotSub: { fontSize: 10, letterSpacing: 1, textTransform: 'uppercase' },
   tip: { padding: 12, borderRadius: radius.md, borderWidth: 1 },
   tipText: { fontSize: 13, lineHeight: 18 },
   fieldLabel: { fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 },

@@ -54,25 +54,28 @@ export async function groqRequest(body: object): Promise<any> {
 }
 
 export async function analyzeFoodImage(
-  base64Image: string,
+  images: string[],            // [topView, sideView?] — base64
   caption: string,
   profile: Pick<Profile, 'height_cm' | 'weight_kg' | 'goal'>
 ): Promise<GroqFoodResult> {
+  const base64s = images.filter(Boolean);
+  const multi = base64s.length > 1;
   const prompt = `You are a precise nutrition analyst specializing in Indian and global cuisine.
 
 User describes: "${caption}"
 User profile: ${profile.height_cm}cm, ${profile.weight_kg}kg, goal: ${goalLabel(profile.goal)}
+${multi ? 'You are given TWO photos of the SAME meal: Image 1 = TOP view (shows footprint/area), Image 2 = SIDE view (shows HEIGHT/thickness). Use BOTH to estimate volume far more accurately — area from top, height from side.' : 'You are given ONE top-down photo.'}
 
 PORTION ESTIMATION — reason through these steps SILENTLY (do not print the reasoning), this is the hardest part:
-1. Identify a SCALE REFERENCE in the image: a dinner plate (~26cm), spoon (~15cm), fork, a hand/fingers, a standard katori/bowl (~150ml), or a phone. State which you used.
-2. Judge each food's footprint and HEIGHT relative to that reference — a heaped serving is far heavier than a flat one. Don't assume; reason from the visible volume.
+1. Identify a SCALE REFERENCE: a dinner plate (~26cm), spoon (~15cm), fork, a hand/fingers, a standard katori/bowl (~150ml), or a phone.
+2. ${multi ? 'Get the food footprint from the TOP image and its HEIGHT/thickness from the SIDE image' : 'Judge footprint and estimate height'} relative to that reference — a heaped serving is far heavier than a flat one.
 3. Convert volume to grams using typical food densities, then to calories/macros.
 4. If no reference object is visible, assume a standard 26cm dinner plate and say confidence is "low".
 5. Use standard Indian portion sizes for Indian dishes (1 roti ~40g, 1 katori dal ~150g, 1 idli ~40g, 1 dosa ~80g).
 
 Also estimate key micronutrients per item and in the total: fiber_g, sugar_g, sodium_mg, potassium_mg, calcium_mg, iron_mg, vitamin_c_mg.
 
-Set "confidence": high only if a clear reference object was visible; medium if portions were inferred from a plate; low if it was a rough guess.
+Set "confidence": high if a clear reference object was visible${multi ? ' AND you used both views' : ''}; medium if portions were inferred from a plate; low if it was a rough guess.
 Put your scale reference + key assumptions in "notes" (one short sentence).
 
 Return ONLY valid JSON — no markdown, no extra text:
@@ -91,7 +94,7 @@ Return ONLY valid JSON — no markdown, no extra text:
       {
         role: 'user',
         content: [
-          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
+          ...base64s.map(b => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b}` } })),
           { type: 'text', text: prompt },
         ],
       },

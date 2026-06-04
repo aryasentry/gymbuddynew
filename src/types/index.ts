@@ -138,6 +138,7 @@ export interface Exercise {
   name: string;
   kind?: ExerciseKind;
   notes?: string;
+  muscles?: string[];
   sort_order: number;
   sets: Set[];
   cardio_segments?: CardioSegment[];

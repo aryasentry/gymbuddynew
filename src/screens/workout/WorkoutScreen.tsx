@@ -36,7 +36,7 @@ export function WorkoutScreen() {
     todayWorkout, workouts, streak, plans,
     fetchToday, fetchWorkouts, fetchStreak, fetchPlans, startPlan, deletePlan,
     createWorkout, updateWorkoutMeta, addExercise, addSet, toggleSet, deleteSet,
-    addCardioSegment, deleteCardioSegment, deleteExercise,
+    addCardioSegment, deleteCardioSegment, deleteExercise, setExerciseMuscles,
   } = useWorkoutStore();
 
   const weight = profile?.weight_kg ?? 70;
@@ -68,6 +68,27 @@ export function WorkoutScreen() {
   const [finishMuscles, setFinishMuscles] = useState<Set<Muscle>>(new Set());
   const [classifying, setClassifying] = useState(false);
   const [showPlans, setShowPlans] = useState(false);
+  const [musclePopup, setMusclePopup] = useState<{ name: string; muscles: Set<Muscle> } | null>(null);
+  const [popupLoading, setPopupLoading] = useState(false);
+
+  async function openMuscles(ex: typeof todayWorkout extends null ? never : any) {
+    haptic.light();
+    const stored = (ex.muscles ?? []) as Muscle[];
+    let muscles = stored.length ? stored : musclesForExercise(ex.name);
+    setMusclePopup({ name: ex.name, muscles: new Set(muscles) });
+    if (muscles.length === 0 && ex.kind !== 'cardio') {
+      setPopupLoading(true);
+      try {
+        const map = await classifyMuscles([ex.name]);
+        const found = (Object.values(map)[0] ?? []) as Muscle[];
+        if (found.length) {
+          await setExerciseMuscles(ex.id, found);
+          setMusclePopup({ name: ex.name, muscles: new Set(found) });
+        }
+      } catch {}
+      setPopupLoading(false);
+    }
+  }
 
   async function startSavedPlan(p: typeof plans[number]) {
     if (!user) return;
@@ -244,7 +265,9 @@ export function WorkoutScreen() {
                   <View style={styles.exHeader}>
                     <View style={{ flex: 1 }}>
                       <View style={styles.exNameRow}>
-                        <Text style={[styles.exName, { color: c.text, fontFamily: fonts.headingLoaded }]}>{ex.name}</Text>
+                        <TouchableOpacity onPress={() => openMuscles(ex)} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
+                          <Text style={[styles.exName, { color: c.text, fontFamily: fonts.headingLoaded }]}>{ex.name} <Text style={{ color: c.accent, fontSize: 13 }}>◗</Text></Text>
+                        </TouchableOpacity>
                         {isCardio && <Text style={[styles.kindTag, { color: c.water, borderColor: c.border }]}>CARDIO</Text>}
                         {!isCardio && ex.sets.length > 0 && (
                           <Text style={[styles.setProgress, { color: completedSets.length === ex.sets.length ? c.green : c.textMuted, fontFamily: fonts.sans }]}>
@@ -441,6 +464,29 @@ export function WorkoutScreen() {
         </View>
       </Modal>
 
+      {/* Per-exercise muscle popup */}
+      <Modal visible={!!musclePopup} transparent animationType="fade" onRequestClose={() => setMusclePopup(null)}>
+        <TouchableOpacity style={styles.popOverlay} activeOpacity={1} onPress={() => setMusclePopup(null)}>
+          <View style={[styles.popCard, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
+            <Text style={[styles.modalTitle, { color: c.text, fontFamily: fonts.headingLoaded }]}>{musclePopup?.name}</Text>
+            {musclePopup && <MuscleMap active={musclePopup.muscles} width={260} />}
+            {popupLoading && (
+              <View style={styles.classifyRow}><ActivityIndicator size="small" color={c.accent} /><Text style={[styles.finishStats, { color: c.textMuted, fontFamily: fonts.bodyItalic }]}>AI mapping…</Text></View>
+            )}
+            <View style={styles.muscleChips}>
+              {musclePopup && [...musclePopup.muscles].map(m => (
+                <View key={m} style={[styles.muscleChip, { backgroundColor: c.accentBg, borderColor: c.accentBorder }]}>
+                  <Text style={[styles.muscleChipText, { color: c.accent, fontFamily: fonts.sans }]}>{MUSCLE_LABEL[m]}</Text>
+                </View>
+              ))}
+              {musclePopup && musclePopup.muscles.size === 0 && !popupLoading && (
+                <Text style={[styles.finishStats, { color: c.textMuted, fontFamily: fonts.bodyItalic }]}>Cardio / no specific muscle</Text>
+              )}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Finish analysis — muscle map of what was worked */}
       <Modal visible={showFinish} transparent animationType="slide" onRequestClose={() => setShowFinish(false)}>
         <View style={styles.modalOverlay}>
@@ -632,4 +678,6 @@ const styles = StyleSheet.create({
   planRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: radius.md, padding: 14, gap: 10, marginBottom: 8 },
   planRowName: { fontSize: 15, textTransform: 'capitalize' },
   planRowMeta: { fontSize: 11, marginTop: 2 },
+  popOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: spacing.lg },
+  popCard: { width: '100%', maxWidth: 340, borderWidth: 1, borderRadius: 20, padding: spacing.lg, gap: spacing.sm, alignItems: 'center' },
 });

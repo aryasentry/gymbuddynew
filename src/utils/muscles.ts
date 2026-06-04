@@ -35,7 +35,10 @@ export function musclesWorked(workout: Workout | null): Set<Muscle> {
     const done = ex.kind === 'cardio'
       ? (ex.cardio_segments ?? []).length > 0
       : ex.sets.some(s => s.completed);
-    if (done) musclesForExercise(ex.name).forEach(m => out.add(m));
+    if (!done) continue;
+    const stored = (ex.muscles ?? []) as Muscle[];
+    const list = stored.length ? stored : musclesForExercise(ex.name);
+    list.forEach(m => out.add(m));
   }
   return out;
 }

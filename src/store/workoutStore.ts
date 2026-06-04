@@ -33,6 +33,7 @@ interface WorkoutState {
   addCardioSegment: (exerciseId: string, seg: Omit<CardioSegment, 'id' | 'exercise_id'>) => Promise<void>;
   deleteCardioSegment: (segId: string, exerciseId: string) => Promise<void>;
   deleteExercise: (exerciseId: string) => Promise<void>;
+  setExerciseMuscles: (exerciseId: string, muscles: string[]) => Promise<void>;
   getPRs: (userId: string) => Promise<Record<string, { weight_kg: number; reps: number; date: string }>>;
 }
 
@@ -234,6 +235,14 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   deleteExercise: async (exerciseId) => {
     await supabase.from('exercises').delete().eq('id', exerciseId);
     const upd = (w: Workout): Workout => ({ ...w, exercises: (w.exercises ?? []).filter(e => e.id !== exerciseId) });
+    set(s => ({ workouts: s.workouts.map(upd), todayWorkout: s.todayWorkout ? upd(s.todayWorkout) : null }));
+  },
+
+  setExerciseMuscles: async (exerciseId, muscles) => {
+    await supabase.from('exercises').update({ muscles }).eq('id', exerciseId);
+    const upd = (w: Workout): Workout => ({
+      ...w, exercises: (w.exercises ?? []).map(e => e.id === exerciseId ? { ...e, muscles } : e),
+    });
     set(s => ({ workouts: s.workouts.map(upd), todayWorkout: s.todayWorkout ? upd(s.todayWorkout) : null }));
   },
 

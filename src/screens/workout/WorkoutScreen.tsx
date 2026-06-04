@@ -15,7 +15,7 @@ import { PlannerModal } from '../../components/workout/PlannerModal';
 import { MuscleMap } from '../../components/workout/MuscleMap';
 import { fonts, spacing, radius } from '../../theme';
 import { useTheme } from '../../theme/useTheme';
-import { epley1RM, bestSet, totalVolume, findLastTime, findPR, formatSets, cardioCalories } from '../../utils/workout';
+import { epley1RM, bestSet, totalVolume, findLastTime, findPR, formatSets, cardioCalories, strengthCalories } from '../../utils/workout';
 import { musclesWorked, musclesForExercise, MUSCLE_LABEL, ALL_MUSCLES } from '../../utils/muscles';
 import { classifyMuscles } from '../../lib/groq';
 import { haptic } from '../../utils/haptics';
@@ -167,6 +167,9 @@ export function WorkoutScreen() {
   const doneSets = allStrengthSets.filter(s => s.completed).length;
   const totalSets = allStrengthSets.length;
   const totalVol = allStrengthSets.filter(s => s.completed).reduce((a, s) => a + s.weight_kg * s.reps, 0);
+  const burnSets = allStrengthSets.filter(s => s.completed && s.reps > 1).length;
+  const strengthBurn = strengthCalories(burnSets, weight);
+  const totalBurn = strengthBurn + cardioTotal;
 
   async function finishSession() {
     haptic.success();
@@ -198,9 +201,9 @@ export function WorkoutScreen() {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <TopBar logo right={
         <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-          <TouchableOpacity onPress={() => setShowPlans(true)}><Text style={{ fontSize: 17 }}>📋</Text></TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowPlanner(true)}><Text style={{ fontSize: 16 }}>✨</Text></TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowPlates(true)}><Text style={{ fontSize: 17 }}>🏋</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowPlans(true)}><Text style={{ fontSize: 17, color: c.text }}>📋</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowPlanner(true)}><Text style={{ fontSize: 16, color: c.text }}>✨</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowPlates(true)}><Text style={{ fontSize: 17, color: c.text }}>🏋</Text></TouchableOpacity>
           {showStartScreen
             ? <TouchableOpacity onPress={() => setShowNewWorkout(true)}><Text style={{ fontSize: 22, color: c.accent }}>+</Text></TouchableOpacity>
             : (
@@ -216,7 +219,7 @@ export function WorkoutScreen() {
 
         {streak.current > 0 && (
           <View style={[styles.streakBanner, { borderBottomColor: c.border }]}>
-            <Text style={styles.streakFlame}>🔥</Text>
+            <Text style={[styles.streakFlame, { color: c.accent }]}>🔥</Text>
             <Text style={[styles.streakText, { color: c.text, fontFamily: fonts.body }]}>
               <Text style={{ color: c.accent, fontWeight: '700' }}>{streak.current} day</Text> workout streak
             </Text>
@@ -241,7 +244,7 @@ export function WorkoutScreen() {
                 <Text style={[styles.workoutSub, { color: c.textMuted, fontFamily: fonts.sans }]}>
                   Today{todayWorkout.category ? ` · ${todayWorkout.category}` : ''}
                 </Text>
-                {cardioTotal > 0 && <Text style={[styles.cardioTotal, { color: c.accent, fontFamily: fonts.sans }]}>~{cardioTotal} kcal cardio</Text>}
+                {totalBurn > 0 && <Text style={[styles.cardioTotal, { color: c.accent, fontFamily: fonts.sans }]}>~{totalBurn} kcal burned</Text>}
               </View>
               <Text style={[styles.workoutTitle, { color: c.text, fontFamily: fonts.headingLoaded }]}>{todayWorkout.name}</Text>
               <TouchableOpacity onPress={() => { setDescDraft(todayWorkout.description ?? ''); setShowEditDesc(true); }}>
@@ -505,7 +508,7 @@ export function WorkoutScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={[styles.modalTitle, { color: c.text, fontFamily: fonts.headingLoaded }]}>Workout complete ✓</Text>
               <Text style={[styles.finishStats, { color: c.textMuted, fontFamily: fonts.sans }]}>
-                {doneSets}/{totalSets} sets{totalVol > 0 ? ` · ${totalVol} kg volume` : ''}{cardioTotal > 0 ? ` · ~${cardioTotal} kcal cardio` : ''}
+                {doneSets}/{totalSets} sets{totalVol > 0 ? ` · ${totalVol} kg volume` : ''}{totalBurn > 0 ? ` · ~${totalBurn} kcal burned` : ''}
               </Text>
 
               <MuscleMap active={finishMuscles} />

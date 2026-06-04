@@ -32,6 +32,13 @@ export function epley1RM(weight: number, reps: number): number {
   return Math.round(weight * (1 + reps / 30));
 }
 
+// Rough calories burned from resistance training (MET ~5.5, ~3.5 min per set incl rest).
+export function strengthCalories(completedSets: number, weightKg: number): number {
+  if (completedSets <= 0) return 0;
+  const minutes = completedSets * 3.5;
+  return Math.round(5.5 * (weightKg || 70) * (minutes / 60));
+}
+
 // Best set in a list by estimated 1RM
 export function bestSet(sets: Set[]): Set | null {
   if (!sets.length) return null;

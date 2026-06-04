@@ -18,6 +18,7 @@ interface ProfileState {
   }) => Promise<string | null>;
   updateWeight: (userId: string, weight_kg: number) => Promise<void>;
   updateTargets: (userId: string, targets: { calorie_target: number; protein_target: number; carb_target: number; fat_target: number }) => Promise<void>;
+  updateGoal: (userId: string, goal: Goal) => Promise<void>;
   clearProfile: () => void;
 }
 
@@ -74,6 +75,14 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     if (!profile) return;
     await supabase.from('profiles').update({ ...targets, updated_at: new Date().toISOString() }).eq('id', userId);
     set({ profile: { ...profile, ...targets } });
+  },
+
+  updateGoal: async (userId, goal) => {
+    const profile = get().profile;
+    if (!profile) return;
+    const targets = calcTargets(profile.tdee, profile.weight_kg, goal);
+    await supabase.from('profiles').update({ goal, ...targets, updated_at: new Date().toISOString() }).eq('id', userId);
+    set({ profile: { ...profile, goal, ...targets } });
   },
 
   clearProfile: () => set({ profile: null }),

@@ -32,6 +32,17 @@ export function ProgressScreen() {
   const [selected, setSelected] = useState<string | null>(null);
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [newWeight, setNewWeight] = useState('');
+  const [dayWeight, setDayWeight] = useState('');
+
+  async function saveDayWeight() {
+    const w = parseFloat(dayWeight);
+    if (!w || !user || !selected) return;
+    await supabase.from('weight_logs').upsert({ user_id: user.id, logged_at: selected, weight_kg: w }, { onConflict: 'user_id,logged_at' });
+    if (selected === todayISO()) await updateWeight(user.id, w);
+    haptic.success();
+    setData(prev => ({ ...prev, [selected]: { ...(prev[selected] ?? { food: [], workouts: [] }), weight: w } }));
+    fetchAnalytics();
+  }
   const [showPhotos, setShowPhotos] = useState(false);
   const [wSeries, setWSeries] = useState<ChartPoint[]>([]);
   const [calSeries, setCalSeries] = useState<ChartPoint[]>([]);
@@ -57,11 +68,13 @@ export function ProgressScreen() {
       .map((w: any) => w.logged_at));
 
     const wS: ChartPoint[] = [], cS: ChartPoint[] = [], pS: ChartPoint[] = [];
+    let lastW = 0; // carry forward last known bodyweight on days with no entry
     for (let i = 0; i < DAYS; i++) {
       const d = new Date(start); d.setDate(start.getDate() + i);
       const ds = d.toISOString().split('T')[0];
       const marked = gym.has(ds);
-      wS.push({ value: wt[ds] ?? 0, marked });
+      if (wt[ds]) lastW = wt[ds];
+      wS.push({ value: lastW, marked });
       cS.push({ value: Math.round(cal[ds] ?? 0), marked });
       pS.push({ value: Math.round(pro[ds] ?? 0), marked });
     }
@@ -138,7 +151,7 @@ export function ProgressScreen() {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <AppBackground />
       <TopBar logo transparent right={
-        <TouchableOpacity onPress={() => setShowPhotos(true)}><Text style={{ fontSize: 18 }}>📸</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowPhotos(true)}><Text style={{ fontSize: 18, color: c.text }}>📸</Text></TouchableOpacity>
       } />
       <ProgressPhotos visible={showPhotos} onClose={() => setShowPhotos(false)} />
 
@@ -195,7 +208,7 @@ export function ProgressScreen() {
             const dd = data[dateStr];
             const isToday = dateStr === todayStr;
             return (
-              <TouchableOpacity key={i} onPress={() => { if (dd) { haptic.light(); setSelected(dateStr); } }} activeOpacity={dd ? 0.6 : 1}
+              <TouchableOpacity key={i} onPress={() => { haptic.light(); setSelected(dateStr); setDayWeight(dd?.weight ? String(dd.weight) : ''); }} activeOpacity={0.6}
                 style={[styles.cell, isToday && { backgroundColor: c.accentBg, borderRadius: radius.sm }]}>
                 <Text style={[styles.dayNum, { color: isToday ? c.accent : c.text, fontFamily: fonts.body }]}>{day}</Text>
                 <View style={styles.cellDots}>
@@ -260,9 +273,26 @@ export function ProgressScreen() {
                 </View>
               ) : null}
 
-              <View style={styles.statRow}>
-                {sel?.weight ? <Text style={[styles.statChip, { color: c.blue, fontFamily: fonts.sans }]}>⚖ {sel.weight} kg</Text> : null}
-                {sel?.water ? <Text style={[styles.statChip, { color: c.water, fontFamily: fonts.sans }]}>💧 {(sel.water / 1000).toFixed(1)} L</Text> : null}
+              {sel?.water ? (
+                <View style={styles.statRow}>
+                  <Text style={[styles.statChip, { color: c.water, fontFamily: fonts.sans }]}>💧 {(sel.water / 1000).toFixed(1)} L</Text>
+                </View>
+              ) : null}
+
+              {/* Bodyweight for this date — edit/add */}
+              <View style={styles.block}>
+                <Text style={[styles.blockLabel, { color: c.blue }]}>Bodyweight</Text>
+                <View style={styles.dayWeightRow}>
+                  <TextInput
+                    style={[styles.dayWeightInput, { backgroundColor: c.surface, borderColor: c.border, color: c.text, fontFamily: fonts.body }]}
+                    placeholder={sel?.weight ? String(sel.weight) : 'kg'} placeholderTextColor={c.textMuted}
+                    value={dayWeight} onChangeText={setDayWeight} keyboardType="decimal-pad"
+                  />
+                  <TouchableOpacity onPress={saveDayWeight} style={[styles.dayWeightBtn, { backgroundColor: c.accent }]}>
+                    <Text style={{ color: c.onAccent, fontFamily: fonts.sans, fontSize: 13 }}>{sel?.weight ? 'Update' : 'Set'}</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={[styles.dayWeightHint, { color: c.textMuted, fontFamily: fonts.bodyItalic }]}>Leave blank to keep previous day's weight</Text>
               </View>
 
               <TouchableOpacity onPress={() => setSelected(null)} style={[styles.closeBtn, { borderColor: c.border }]}>
@@ -313,6 +343,10 @@ const styles = StyleSheet.create({
   setLine: { fontSize: 12, lineHeight: 17 },
   statRow: { flexDirection: 'row', gap: 16, marginTop: 12 },
   statChip: { fontSize: 13 },
+  dayWeightRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  dayWeightInput: { flex: 1, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 9, fontSize: 15 },
+  dayWeightBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.sm },
+  dayWeightHint: { fontSize: 11, marginTop: 4 },
   closeBtn: { borderWidth: 1, borderRadius: radius.md, padding: 12, alignItems: 'center', marginTop: spacing.md },
   closeText: { fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },
 });

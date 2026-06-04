@@ -27,7 +27,7 @@ export function SettingsScreen() {
   const navigation = useNavigation();
   const { themeName, mode, showDots, coachModel, setTheme, setMode, setShowDots, setCoachModel } = useThemeStore();
   const { signOut, user } = useAuthStore();
-  const { profile, updateTargets } = useProfileStore();
+  const { profile, updateTargets, updateGoal } = useProfileStore();
 
   // editable daily goals
   const [cal, setCal] = useState(String(profile?.calorie_target ?? ''));
@@ -177,6 +177,21 @@ export function SettingsScreen() {
           <Text style={{ color: c.accent, fontSize: 18 }}>→</Text>
         </TouchableOpacity>
 
+        {/* Goal */}
+        <Text style={[styles.section, { color: c.textMuted, marginTop: spacing.lg }]}>Goal</Text>
+        <Text style={[styles.sectionHint, { color: c.textMuted, fontFamily: fonts.bodyItalic }]}>Changing this recalculates your targets</Text>
+        <View style={styles.goalChips}>
+          {(['fat_loss', 'muscle_gain', 'recomp', 'maintenance'] as const).map(g => (
+            <TouchableOpacity
+              key={g}
+              onPress={() => { if (user && profile?.goal !== g) { haptic.medium(); updateGoal(user.id, g); } }}
+              style={[styles.goalChip, { borderColor: profile?.goal === g ? c.accent : c.border, backgroundColor: profile?.goal === g ? c.accentBg : c.surface }]}
+            >
+              <Text style={[styles.goalChipText, { color: profile?.goal === g ? c.accent : c.textSecondary, fontFamily: fonts.sans }]}>{goalLabel(g)}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* Daily Goals */}
         <Text style={[styles.section, { color: c.textMuted, marginTop: spacing.lg }]}>Daily Goals</Text>
         <Text style={[styles.sectionHint, { color: c.textMuted, fontFamily: fonts.bodyItalic }]}>Override your auto-calculated targets</Text>
@@ -239,6 +254,9 @@ const styles = StyleSheet.create({
   scroll: { padding: spacing.lg, gap: spacing.sm },
   section: { fontFamily: fonts.sans, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 },
   sectionHint: { fontSize: 12, marginTop: -2, marginBottom: 6 },
+  goalChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  goalChip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1 },
+  goalChipText: { fontSize: 13, letterSpacing: 0.3 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: radius.md, padding: 14, marginTop: spacing.sm, gap: 12 },
   linkRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: radius.md, padding: 14, marginTop: spacing.sm, gap: 12 },
   toggleTitle: { fontSize: 14 },

@@ -81,10 +81,10 @@ export function DashboardScreen() {
       <TopBar logo transparent right={
         <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
           <TouchableOpacity onPress={() => navigation.navigate('Progress')}>
-            <Text style={{ fontSize: 18 }}>🗓</Text>
+            <Text style={{ fontSize: 18, color: textColor }}>🗓</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
-            <Text style={{ fontSize: 18 }}>⚙︎</Text>
+            <Text style={{ fontSize: 20, color: textColor }}>⚙</Text>
           </TouchableOpacity>
         </View>
       } />
@@ -148,7 +148,7 @@ export function DashboardScreen() {
         <FadeInView delay={240}>
         <View style={[styles.section, { borderBottomColor: borderColor }]}>
           <View style={styles.streakRow}>
-            <Text style={styles.streakFlame}>🔥</Text>
+            <Text style={[styles.streakFlame, { color: accentColor }]}>🔥</Text>
             <Text style={[styles.streakText, { color: textColor, fontFamily: fonts.body }]}>
               <Text style={{ color: accentColor, fontWeight: '700' }}>{streak.current} day</Text> workout streak
             </Text>

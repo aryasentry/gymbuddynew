@@ -208,11 +208,17 @@ function FoodLogMain() {
                 <Image source={{ uri: selected.image_url }} style={[styles.detailImg, { borderColor: c.border }]} resizeMode="cover" />
               ) : null}
 
-              {/* items */}
+              {/* per-item breakdown */}
               {(selected?.food_items ?? []).map((it, i) => (
                 <View key={i} style={[styles.detailItem, { borderBottomColor: c.border }]}>
-                  <Text style={[styles.detailItemName, { color: c.text, fontFamily: fonts.body }]}>{it.name}</Text>
-                  <Text style={[styles.detailItemQty, { color: c.textMuted, fontFamily: fonts.sans }]}>{it.quantity}{it.unit}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.detailItemName, { color: c.text, fontFamily: fonts.body }]}>{it.name} <Text style={{ color: c.textMuted, fontSize: 12 }}>· {it.quantity}{it.unit}</Text></Text>
+                    <Text style={[styles.detailItemMacros, { color: c.textMuted, fontFamily: fonts.sans }]}>
+                      P {Math.round(it.protein)}g · C {Math.round(it.carbs)}g · F {Math.round(it.fat)}g
+                      {it.fiber_g ? ` · fiber ${Math.round(it.fiber_g)}g` : ''}
+                    </Text>
+                  </View>
+                  <Text style={[styles.detailItemCal, { color: c.accent, fontFamily: fonts.sans }]}>{Math.round(it.calories)}</Text>
                 </View>
               ))}
 
@@ -220,6 +226,11 @@ function FoodLogMain() {
               <View style={{ marginTop: spacing.md }}>
                 {selected && <MacroBars total={logTotal(selected)} />}
               </View>
+              {selected && !((selected.total_fiber_g ?? 0) || (selected.total_sodium_mg ?? 0) || (selected.total_iron_mg ?? 0)) && (
+                <Text style={[styles.detailMeta, { color: c.textMuted, fontFamily: fonts.bodyItalic, textAlign: 'center', marginTop: 6 }]}>
+                  Re-analyse to estimate micronutrients
+                </Text>
+              )}
 
               {selected?.user_correction ? (
                 <Text style={[styles.detailMeta, { color: c.textMuted, fontFamily: fonts.bodyItalic, marginTop: spacing.sm }]}>
@@ -265,9 +276,10 @@ const styles = StyleSheet.create({
   detailTitle: { fontSize: 20, letterSpacing: -0.3, flex: 1 },
   detailMeta: { fontSize: 12, letterSpacing: 0.3, marginTop: 2 },
   detailImg: { width: '100%', height: 200, borderRadius: radius.md, borderWidth: 1, marginTop: spacing.md },
-  detailItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, marginTop: 2 },
-  detailItemName: { fontSize: 14, flex: 1 },
-  detailItemQty: { fontSize: 13 },
+  detailItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, marginTop: 2, gap: 10 },
+  detailItemName: { fontSize: 14 },
+  detailItemMacros: { fontSize: 11, marginTop: 3 },
+  detailItemCal: { fontSize: 15, fontWeight: '700' },
   detailBtns: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
   logCal: { fontSize: 18, fontWeight: '700' },
   logCalUnit: { fontSize: 10, letterSpacing: 1, textTransform: 'uppercase' },
